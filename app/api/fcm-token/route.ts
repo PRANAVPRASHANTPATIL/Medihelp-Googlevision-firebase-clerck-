@@ -1,20 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Initialize Firebase Admin SDK
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: "vision-2322a",
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
+let adminApp: any = null
+
+function getFirebaseAdmin() {
+  if (!adminApp && !getApps().length) {
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+    const projectId = "vision-2322a"
+
+    if (!privateKey || !clientEmail) {
+      throw new Error("Firebase Admin credentials not configured")
+    }
+
+    adminApp = initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey: privateKey.replace(/\\n/g, "\n"),
+      }),
+    })
+  }
+  return adminApp
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { registration } = await request.json()
+    try {
+      getFirebaseAdmin()
+    } catch (adminError) {
+      console.error("Firebase Admin initialization failed:", adminError)
+      return NextResponse.json({ error: "Firebase Admin not configured" }, { status: 500 })
+    }
 
     const vapidKey = process.env.FIREBASE_VAPID_KEY
 
