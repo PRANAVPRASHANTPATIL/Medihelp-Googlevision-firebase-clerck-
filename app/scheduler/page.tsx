@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,11 +8,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Clock, Edit3, Save, X, Plus, Heart, Info, Trash2 } from "lucide-react"
+import { Clock, Edit3, Save, X, Plus, Heart, Info, Trash2, Bell, BellOff } from "lucide-react"
 import Link from "next/link"
+import { useNotifications } from "@/hooks/use-notifications"
+import type { MedicationReminder } from "@/lib/notification-service"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SchedulerPage() {
   const [editingMed, setEditingMed] = useState<number | null>(null)
+  const { isInitialized, hasPermission, scheduleReminder, cancelReminder, requestPermission } = useNotifications()
+  const { toast } = useToast()
+  const [notificationStates, setNotificationStates] = useState<Record<number, boolean>>({})
+
   const [medications, setMedications] = useState([
     {
       id: 1,
@@ -56,6 +63,14 @@ export default function SchedulerPage() {
     },
   ])
 
+  useEffect(() => {
+    const initialStates: Record<number, boolean> = {}
+    medications.forEach((med) => {
+      initialStates[med.id] = false // Default to notifications off
+    })
+    setNotificationStates(initialStates)
+  }, [])
+
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
   const timeSlots = [
     "6:00 AM",
@@ -88,6 +103,94 @@ export default function SchedulerPage() {
 
   const handleCancelEdit = () => {
     setEditingMed(null)
+  }
+
+  const handleToggleNotifications = async (medicationId: number) => {
+    const medication = medications.find((med) => med.id === medicationId)
+    if (!medication) return
+
+    const isCurrentlyEnabled = notificationStates[medicationId]
+
+    if (!isCurrentlyEnabled) {
+      // Enable notifications
+      if (!hasPermission) {
+        const granted = await requestPermission()
+        if (!granted) {
+          toast({
+            title: "Permission Required",
+            description: "Please allow notifications to receive medication reminders.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+
+      // Schedule notifications for each time
+      const reminder: MedicationReminder = {
+        id: `med-${medication.id}`,
+        medicationName: medication.name,
+        dosage: medication.dosage,
+        time: medication.times.join(", "),
+        frequency: medication.frequency,
+        userId: "current-user", // Replace with actual user ID
+      }
+
+      const success = await scheduleReminder(reminder)
+      if (success) {
+        setNotificationStates((prev) => ({ ...prev, [medicationId]: true }))
+        toast({
+          title: "Notifications Enabled",
+          description: `You'll receive reminders for ${medication.name}`,
+        })
+      } else {
+        toast({
+          title: "Failed to Enable Notifications",
+          description: "Please try again later.",
+          variant: "destructive",
+        })
+      }
+    } else {
+      // Disable notifications
+      const success = await cancelReminder(`med-${medicationId}`)
+      if (success) {
+        setNotificationStates((prev) => ({ ...prev, [medicationId]: false }))
+        toast({
+          title: "Notifications Disabled",
+          description: `Reminders for ${medication.name} have been turned off`,
+        })
+      } else {
+        toast({
+          title: "Failed to Disable Notifications",
+          description: "Please try again later.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const NotificationBanner = () => {
+    if (hasPermission) return null
+
+    return (
+      <Card className="border-amber-200 bg-amber-50 mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bell className="w-5 h-5 text-amber-600" />
+              <div>
+                <h3 className="font-medium text-amber-800">Enable Notifications</h3>
+                <p className="text-sm text-amber-700">
+                  Get timely reminders for your medications to stay on track with your health routine.
+                </p>
+              </div>
+            </div>
+            <Button onClick={requestPermission} className="bg-amber-600 hover:bg-amber-700">
+              Enable Notifications
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -123,6 +226,8 @@ export default function SchedulerPage() {
           <h2 className="text-3xl font-bold mb-2 font-poppins">Medication Schedule</h2>
           <p className="text-muted-foreground text-lg">Manage your daily medication routine</p>
         </div>
+
+        <NotificationBanner />
 
         <Tabs defaultValue="schedule" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 max-w-md">
@@ -167,7 +272,15 @@ export default function SchedulerPage() {
                                     </p>
                                   </div>
                                 </div>
-                                <Badge variant="outline">{med.frequency}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline">{med.frequency}</Badge>
+                                  {notificationStates[med.id] && (
+                                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                      <Bell className="w-3 h-3 mr-1" />
+                                      Notifications On
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -197,6 +310,24 @@ export default function SchedulerPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={notificationStates[med.id] ? "default" : "outline"}
+                          onClick={() => handleToggleNotifications(med.id)}
+                          className={notificationStates[med.id] ? "bg-green-600 hover:bg-green-700" : ""}
+                        >
+                          {notificationStates[med.id] ? (
+                            <>
+                              <Bell className="w-4 h-4 mr-1" />
+                              Notifications On
+                            </>
+                          ) : (
+                            <>
+                              <BellOff className="w-4 h-4 mr-1" />
+                              Enable Notifications
+                            </>
+                          )}
+                        </Button>
                         {editingMed === med.id ? (
                           <>
                             <Button size="sm" onClick={handleSaveMedication}>

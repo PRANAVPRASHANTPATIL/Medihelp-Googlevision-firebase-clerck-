@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useUser, UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
-  Camera,
-  Upload,
   Clock,
   Pill,
   FileText,
@@ -18,25 +17,78 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
+  Calendar,
 } from "lucide-react"
 import Link from "next/link"
+import { NotificationPermissionDialog } from "@/components/notification-permission-dialog"
+import { NotificationStatusBanner } from "@/components/notification-status-banner"
+import { useNotifications } from "@/hooks/use-notifications"
+import { PrescriptionUpload } from "@/components/prescription-upload"
+import { AddMedicationDialog } from "@/components/add-medication-dialog"
+
+interface Medication {
+  id: string
+  name: string
+  dosage: string
+  frequency: string
+  time: string
+  instructions?: string
+  type: string
+  taken?: boolean
+}
 
 export default function DashboardPage() {
-  const [todayProgress] = useState(75)
+  const [medications, setMedications] = useState<Medication[]>([])
+  const [showAddMedicationDialog, setShowAddMedicationDialog] = useState(false)
+  const [todayProgress, setTodayProgress] = useState(0)
+  const [showNotificationDialog, setShowNotificationDialog] = useState(false)
+  const { hasPermission, isLoading } = useNotifications()
+  const { user } = useUser()
 
-  // Mock data - replace with real data from your backend
-  const todayMedications = [
-    { id: 1, name: "Metformin", dosage: "500mg", time: "8:00 AM", taken: true, type: "Diabetes" },
-    { id: 2, name: "Lisinopril", dosage: "10mg", time: "12:00 PM", taken: true, type: "Blood Pressure" },
-    { id: 3, name: "Atorvastatin", dosage: "20mg", time: "6:00 PM", taken: false, type: "Cholesterol" },
-    { id: 4, name: "Aspirin", dosage: "81mg", time: "9:00 PM", taken: false, type: "Heart Health" },
-  ]
+  const todayMedications = medications.map((med) => ({
+    ...med,
+    taken: false, // Default to not taken for new medications
+  }))
 
-  const recentPrescriptions = [
-    { id: 1, date: "2024-01-15", doctor: "Dr. Smith", medications: 3, status: "Active" },
-    { id: 2, date: "2024-01-10", doctor: "Dr. Johnson", medications: 2, status: "Completed" },
-    { id: 3, date: "2024-01-05", doctor: "Dr. Brown", medications: 4, status: "Active" },
-  ]
+  useEffect(() => {
+    if (todayMedications.length > 0) {
+      const takenCount = todayMedications.filter((med) => med.taken).length
+      const progress = Math.round((takenCount / todayMedications.length) * 100)
+      setTodayProgress(progress)
+    } else {
+      setTodayProgress(0)
+    }
+  }, [todayMedications])
+
+  useEffect(() => {
+    // Show notification dialog if user hasn't been asked before
+    const hasBeenAsked = localStorage.getItem("notification-permission-asked")
+    if (!isLoading && !hasPermission && !hasBeenAsked) {
+      // Delay showing dialog to let page load
+      const timer = setTimeout(() => {
+        setShowNotificationDialog(true)
+        localStorage.setItem("notification-permission-asked", "true")
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [hasPermission, isLoading])
+
+  const recentPrescriptions: any[] = []
+
+  const handleUploadComplete = (result: any) => {
+    console.log("Upload completed:", result)
+    // Handle the OCR result - update medications, show success message, etc.
+    // You can refresh the medication list or navigate to scheduler
+  }
+
+  const handleAddMedication = (newMedication: Medication) => {
+    setMedications((prev) => [...prev, newMedication])
+    console.log("[v0] Added new medication:", newMedication)
+  }
+
+  const toggleMedicationTaken = (medicationId: string) => {
+    setMedications((prev) => prev.map((med) => (med.id === medicationId ? { ...med, taken: !med.taken } : med)))
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
@@ -54,14 +106,23 @@ export default function DashboardPage() {
               </div>
             </Link>
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={() => setShowNotificationDialog(true)}>
                 <Bell className="w-4 h-4 mr-2" />
                 Notifications
               </Button>
-              <Button variant="outline" size="sm">
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </Button>
+              <Link href="/scheduler">
+                <Button variant="outline" size="sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Scheduler
+                </Button>
+              </Link>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10",
+                  },
+                }}
+              />
             </div>
           </div>
         </div>
@@ -70,9 +131,17 @@ export default function DashboardPage() {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2 font-poppins">Welcome to Your Dashboard</h2>
-          <p className="text-muted-foreground text-lg">Here's your medication overview for today</p>
+          <h2 className="text-3xl font-bold mb-2 font-poppins">
+            Welcome{user?.firstName ? `, ${user.firstName}` : ""}!
+          </h2>
+          <p className="text-muted-foreground text-lg">
+            {medications.length === 0
+              ? "Get started by uploading your first prescription or adding medications manually"
+              : "Keep track of your medications and stay healthy"}
+          </p>
         </div>
+
+        <NotificationStatusBanner />
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -96,7 +165,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Medications Today</p>
-                  <p className="text-2xl font-bold">4</p>
+                  <p className="text-2xl font-bold">{todayMedications.length}</p>
                 </div>
                 <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center">
                   <Pill className="w-6 h-6 text-secondary" />
@@ -110,7 +179,9 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Next Dose</p>
-                  <p className="text-2xl font-bold">6:00 PM</p>
+                  <p className="text-2xl font-bold">
+                    {todayMedications.length > 0 ? todayMedications[0]?.time || "--" : "--"}
+                  </p>
                 </div>
                 <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center">
                   <Clock className="w-6 h-6 text-accent" />
@@ -124,7 +195,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Streak</p>
-                  <p className="text-2xl font-bold">7 days</p>
+                  <p className="text-2xl font-bold">0 days</p>
                 </div>
                 <div className="w-12 h-12 bg-chart-3/10 rounded-xl flex items-center justify-center">
                   <CheckCircle2 className="w-6 h-6 text-chart-3" />
@@ -138,25 +209,7 @@ export default function DashboardPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Quick Actions */}
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="font-poppins">Quick Actions</CardTitle>
-                <CardDescription>Upload new prescriptions or manage your medications</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Button size="lg" className="h-16 flex-col gap-2">
-                    <Camera className="w-6 h-6" />
-                    <span>Take Photo</span>
-                  </Button>
-                  <Button variant="outline" size="lg" className="h-16 flex-col gap-2 bg-transparent">
-                    <Upload className="w-6 h-6" />
-                    <span>Upload File</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <PrescriptionUpload onUploadComplete={handleUploadComplete} />
 
             {/* Today's Medications */}
             <Card className="border-2">
@@ -165,31 +218,67 @@ export default function DashboardPage() {
                 <CardDescription>Track your daily medication schedule</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {todayMedications.map((med) => (
-                    <div key={med.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-3 h-3 rounded-full ${med.taken ? "bg-secondary" : "bg-muted"}`} />
-                        <div>
-                          <h4 className="font-medium">{med.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {med.dosage} • {med.type}
-                          </p>
+                {todayMedications.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Pill className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No medications scheduled</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Upload a prescription or add medications manually to get started
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <Link href="/scheduler">
+                        <Button variant="outline">
+                          <Calendar className="w-4 h-4 mr-2" />
+                          Go to Scheduler
+                        </Button>
+                      </Link>
+                      <Button variant="outline" onClick={() => setShowAddMedicationDialog(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Manually
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {todayMedications.map((med) => (
+                      <div key={med.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => toggleMedicationTaken(med.id)}
+                            className={`w-3 h-3 rounded-full border-2 ${
+                              med.taken
+                                ? "bg-secondary border-secondary"
+                                : "bg-transparent border-muted-foreground hover:border-secondary"
+                            }`}
+                          />
+                          <div>
+                            <h4 className="font-medium">{med.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {med.dosage} • {med.type} • {med.frequency}
+                            </p>
+                            {med.instructions && (
+                              <p className="text-xs text-muted-foreground mt-1">{med.instructions}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{med.time}</p>
+                          <Badge variant={med.taken ? "default" : "secondary"} className="text-xs">
+                            {med.taken ? "Taken" : "Pending"}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">{med.time}</p>
-                        <Badge variant={med.taken ? "default" : "secondary"} className="text-xs">
-                          {med.taken ? "Taken" : "Pending"}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Button variant="outline" className="w-full mt-4 bg-transparent">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Manual Entry
-                </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      className="w-full mt-4 bg-transparent"
+                      onClick={() => setShowAddMedicationDialog(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Manual Entry
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -203,22 +292,29 @@ export default function DashboardPage() {
                 <CardDescription>Next medication reminders</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-accent/5 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-accent" />
-                    <div>
-                      <p className="font-medium">Atorvastatin</p>
-                      <p className="text-sm text-muted-foreground">6:00 PM (in 2 hours)</p>
-                    </div>
+                {todayMedications.length === 0 ? (
+                  <div className="text-center py-8">
+                    <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No upcoming reminders</p>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <Clock className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Aspirin</p>
-                      <p className="text-sm text-muted-foreground">9:00 PM (in 5 hours)</p>
-                    </div>
+                ) : (
+                  <div className="space-y-3">
+                    {todayMedications
+                      .filter((med) => !med.taken)
+                      .slice(0, 3)
+                      .map((med) => (
+                        <div key={med.id} className="flex items-center gap-3 p-3 bg-accent/5 rounded-lg">
+                          <AlertCircle className="w-5 h-5 text-accent" />
+                          <div>
+                            <p className="font-medium">{med.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {med.time} • {med.dosage}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -229,27 +325,35 @@ export default function DashboardPage() {
                 <CardDescription>Your prescription history</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recentPrescriptions.map((prescription) => (
-                    <div key={prescription.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">{prescription.doctor}</p>
-                          <p className="text-sm text-muted-foreground">{prescription.date}</p>
+                {recentPrescriptions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No prescriptions yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Upload your first prescription to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentPrescriptions.map((prescription) => (
+                      <div key={prescription.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">{prescription.doctor}</p>
+                            <p className="text-sm text-muted-foreground">{prescription.date}</p>
+                          </div>
                         </div>
+                        <Badge variant={prescription.status === "Active" ? "default" : "secondary"}>
+                          {prescription.status}
+                        </Badge>
                       </div>
-                      <Badge variant={prescription.status === "Active" ? "default" : "secondary"}>
-                        {prescription.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/prescriptions">
-                  <Button variant="outline" className="w-full mt-4 bg-transparent">
-                    View All Prescriptions
-                  </Button>
-                </Link>
+                    ))}
+                    <Link href="/prescriptions">
+                      <Button variant="outline" className="w-full mt-4 bg-transparent">
+                        View All Prescriptions
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -270,6 +374,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <NotificationPermissionDialog open={showNotificationDialog} onOpenChange={setShowNotificationDialog} />
+      <AddMedicationDialog
+        open={showAddMedicationDialog}
+        onOpenChange={setShowAddMedicationDialog}
+        onAddMedication={handleAddMedication}
+      />
     </div>
   )
 }
