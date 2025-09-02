@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MediHelp – Manual Dashboard (HTML/JS)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="/manual/styles.css" rel="stylesheet" />
+</head>
+<body>
+  <header class="container header">
+    <h1 class="title text-balance">MediHelp – Manual Dashboard</h1>
+    <div class="header-actions">
+      <button id="addManuallyBtn" class="btn primary">+ Add Manually</button>
+      <button id="resetBtn" class="btn danger" title="Clear stored medications in this browser">Reset</button>
+    </div>
+  </header>
+
+  <main class="container grid">
+    <section class="card">
+      <h2>Today's Medications</h2>
+      <ul id="todayList" class="list empty-state">
+        <li>No medications yet. Add one to get started.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Schedule</h2>
+      <div class="table-wrapper">
+        <table class="table" id="scheduleTable" aria-describedby="scheduleEmpty">
+          <thead>
+            <tr>
+              <th scope="col">Taken</th>
+              <th scope="col">Name</th>
+              <th scope="col">Dosage</th>
+              <th scope="col">Frequency</th>
+              <th scope="col">Time</th>
+              <th scope="col">Instructions</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleBody">
+             filled by JS 
+          </tbody>
+        </table>
+        <div id="scheduleEmpty" class="empty-state" role="status">No scheduled medications yet.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Today's Progress</h2>
+      <div class="progress-wrap">
+        <div id="progressLabel" class="progress-label">0% complete</div>
+        <div class="progress">
+          <div id="progressBar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="progressHint" class="muted">Mark medications as taken to update progress.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Add Medication Dialog -->
+  <dialog id="addMedicationDialog" class="dialog" aria-labelledby="dialogTitle">
+    <form id="medForm" method="dialog" class="form">
+      <h3 id="dialogTitle">Add Medication</h3>
+
+      <label>
+        Medication Name
+        <input type="text" name="name" required placeholder="e.g., Metformin" />
+      </label>
+
+      <label>
+        Dosage
+        <input type="text" name="dosage" required placeholder="e.g., 500 mg" />
+      </label>
+
+      <label>
+        Frequency
+        <select name="frequency" required>
+          <option value="">Select frequency</option>
+          <option>Once daily</option>
+          <option>Twice daily</option>
+          <option>Three times daily</option>
+          <option>Every other day</option>
+          <option>As needed</option>
+        </select>
+      </label>
+
+      <label>
+        Time
+        <input type="time" name="time" required />
+      </label>
+
+      <label>
+        Instructions (optional)
+        <input type="text" name="instructions" placeholder="e.g., after meals" />
+      </label>
+
+      <div class="actions">
+        <button type="button" id="cancelDialog" class="btn">Cancel</button>
+        <button type="submit" class="btn primary">Add</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="container footer" role="contentinfo">
+    <p class="muted">created by G4- Pranav Patil</p>
+  </footer>
+
+  <script src="/manual/app.js" async></script>
+</body>
+</html>

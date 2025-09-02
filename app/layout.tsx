@@ -31,9 +31,18 @@ export default function RootLayout({
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || ""
 
   return (
-    <ClerkProvider publishableKey={publishableKey}>
+    <ClerkProvider publishableKey={publishableKey || undefined}>
       <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
-        <body className="font-sans antialiased">{children}</body>
+        <body className="font-sans antialiased">
+          <div className="min-h-dvh flex flex-col">
+            <main className="flex-1">{children}</main>
+            <footer role="contentinfo" className="border-t">
+              <div className="mx-auto max-w-6xl px-4 py-6 text-center text-xs text-gray-500">
+                created by G4- Pranav Patil
+              </div>
+            </footer>
+          </div>
+        </body>
       </html>
     </ClerkProvider>
   )
